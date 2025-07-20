@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     name: Build and analyze
-    runs-on: ubuntu-latest
+    runs-on: aninda-sarker-ostad-module-8
     
     steps:
       - uses: actions/checkout@v4
