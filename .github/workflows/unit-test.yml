@@ -1,0 +1,179 @@
+name: Unit Tests and Coverage
+
+on:
+  push:
+    branches: [main, develop, chore/eslint]
+  pull_request:
+    branches: [main, develop, chore/eslint]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install test dependencies
+        run: |
+          npm install --save-dev jest @testing-library/react @testing-library/jest-dom jest-environment-jsdom
+
+      - name: Create jest config
+        run: |
+          cat > jest.config.js << 'EOF'
+          const nextJest = require('next/jest')
+          
+          const createJestConfig = nextJest({
+            // Provide the path to your Next.js app to load next.config.js and .env files
+            dir: './',
+          })
+          
+          // Add any custom config to be passed to Jest
+          const config = {
+            coverageProvider: 'v8',
+            testEnvironment: 'jsdom',
+            // Add more setup options before each test is run
+            setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+            collectCoverage: true,
+            coverageDirectory: 'coverage',
+            coverageReporters: ['text', 'lcov', 'html'],
+            collectCoverageFrom: [
+              'src/**/*.{js,jsx,ts,tsx}',
+              '!src/**/*.d.ts',
+              '!src/**/*.stories.{js,jsx,ts,tsx}',
+              '!src/**/node_modules/**',
+            ],
+          }
+          
+          // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
+          module.exports = createJestConfig(config)
+          EOF
+
+      - name: Create jest setup file
+        run: |
+          cat > jest.setup.js << 'EOF'
+          import '@testing-library/jest-dom'
+          EOF
+
+      - name: Create sample test
+        run: |
+          mkdir -p src/__tests__
+          cat > src/__tests__/sample.test.js << 'EOF'
+          import { render, screen } from '@testing-library/react'
+          import '@testing-library/jest-dom'
+          
+          // Mock Next.js components
+          jest.mock('next/image', () => ({
+            __esModule: true,
+            default: (props) => {
+              return <img {...props} />
+            },
+          }))
+          
+          jest.mock('next/link', () => ({
+            __esModule: true,
+            default: ({ children, ...props }) => {
+              return <a {...props}>{children}</a>
+            },
+          }))
+          
+          // Sample test
+          describe('Sample Test Suite', () => {
+            it('should pass basic test', () => {
+              expect(true).toBe(true)
+            })
+          
+            it('should handle string operations', () => {
+              const testString = 'Hello World'
+              expect(testString).toContain('Hello')
+              expect(testString.length).toBe(11)
+            })
+          
+            it('should handle array operations', () => {
+              const testArray = [1, 2, 3, 4, 5]
+              expect(testArray).toHaveLength(5)
+              expect(testArray).toContain(3)
+            })
+          })
+          EOF
+
+      - name: Update package.json with test script
+        run: |
+          npm pkg set scripts.test="jest"
+          npm pkg set scripts.test:watch="jest --watch"
+          npm pkg set scripts.test:coverage="jest --coverage"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+          # token: ${{ secrets.CODECOV_TOKEN }}  # Uncomment and add token in secrets
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            !coverage/**/*.tmp
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            try {
+              const coveragePath = path.join(process.cwd(), 'coverage', 'coverage-summary.json');
+              if (fs.existsSync(coveragePath)) {
+                const coverage = JSON.parse(fs.readFileSync(coveragePath, 'utf8'));
+                const { total } = coverage;
+                
+                const comment = `## 📊 Test Coverage Report
+                
+                | Metric | Percentage | Covered | Total |
+                |--------|------------|---------|-------|
+                | **Statements** | ${total.statements.pct}% | ${total.statements.covered} | ${total.statements.total} |
+                | **Branches** | ${total.branches.pct}% | ${total.branches.covered} | ${total.branches.total} |
+                | **Functions** | ${total.functions.pct}% | ${total.functions.covered} | ${total.functions.total} |
+                | **Lines** | ${total.lines.pct}% | ${total.lines.covered} | ${total.lines.total} |
+                
+                Coverage report available in the artifacts section.`;
+                
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: comment
+                });
+              }
+            } catch (error) {
+              console.log('Error reading coverage report:', error.message);
+            }
