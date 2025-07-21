@@ -12,77 +12,87 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Connect to EC2 and set up monitoring stack
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_MONITORING_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          script: |
-            #!/bin/bash
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            # Update system
-            sudo apt update -y
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
+          chmod 600 ~/.ssh/ec2-key.pem
+          ssh-keyscan -H ${{ secrets.EC2_MONITORING_HOST }} >> ~/.ssh/known_hosts
 
-            # Install Docker if not present
-            if ! command -v docker &> /dev/null; then
-              curl -fsSL https://get.docker.com | sudo bash
-              sudo usermod -aG docker $USER
-            fi
+      - name: Create monitoring setup script
+        run: |
+          cat > setup-monitoring.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          # Update system
+          sudo apt update -y
 
-            # Install Docker Compose if not present
-            if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-              sudo apt install -y docker-compose
-            fi
+          # Install Docker if not present
+          if ! command -v docker &> /dev/null; then
+            curl -fsSL https://get.docker.com | sudo bash
+            sudo usermod -aG docker $USER
+          fi
 
-            # Create Docker Compose setup
-            mkdir -p ~/monitoring
-            cd ~/monitoring
+          # Install Docker Compose if not present
+          if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+            sudo apt install -y docker-compose
+          fi
 
-            cat > docker-compose.yml <<EOF
-            version: '3'
+          # Create Docker Compose setup
+          mkdir -p ~/monitoring
+          cd ~/monitoring
 
-            services:
-              prometheus:
-                image: prom/prometheus
-                ports:
-                  - "9090:9090"
-                volumes:
-                  - ./prometheus.yml:/etc/prometheus/prometheus.yml
+          cat > docker-compose.yml <<EOC
+          version: '3'
+          services:
+            prometheus:
+              image: prom/prometheus
+              ports:
+                - "9090:9090"
+              volumes:
+                - ./prometheus.yml:/etc/prometheus/prometheus.yml
+            node-exporter:
+              image: prom/node-exporter
+              ports:
+                - "9100:9100"
+            grafana:
+              image: grafana/grafana
+              ports:
+                - "3001:3000"
+              environment:
+                - GF_SECURITY_ADMIN_USER=admin
+                - GF_SECURITY_ADMIN_PASSWORD=admin
+              volumes:
+                - grafana-data:/var/lib/grafana
+          volumes:
+            grafana-data:
+          EOC
 
-              node-exporter:
-                image: prom/node-exporter
-                ports:
-                  - "9100:9100"
+          cat > prometheus.yml <<EOP
+          global:
+            scrape_interval: 15s
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+            - job_name: 'node-exporter'
+              static_configs:
+                - targets: ['localhost:9100']
+          EOP
 
-              grafana:
-                image: grafana/grafana
-                ports:
-                  - "3001:3000"
-                environment:
-                  - GF_SECURITY_ADMIN_USER=admin
-                  - GF_SECURITY_ADMIN_PASSWORD=admin
-                volumes:
-                  - grafana-data:/var/lib/grafana
+          # Start stack
+          docker compose down || true
+          docker compose up -d
+          EOF
+          chmod +x setup-monitoring.sh
 
-            volumes:
-              grafana-data:
-            EOF
+      - name: Copy setup script to EC2
+        run: |
+          scp -i ~/.ssh/ec2-key.pem setup-monitoring.sh ubuntu@${{ secrets.EC2_MONITORING_HOST }}:/tmp/
 
-            cat > prometheus.yml <<EOF
-            global:
-              scrape_interval: 15s
-
-            scrape_configs:
-              - job_name: 'prometheus'
-                static_configs:
-                  - targets: ['localhost:9090']
-
-              - job_name: 'node-exporter'
-                static_configs:
-                  - targets: ['localhost:9100']
-            EOF
-
-            # Start stack
-            docker compose down || true
-            docker compose up -d
+      - name: Run setup script on EC2
+        run: |
+          ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_MONITORING_HOST }} 'bash /tmp/setup-monitoring.sh'
