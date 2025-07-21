@@ -5,7 +5,7 @@ on:
     workflows: ["Docker Build and Push"]
     types:
       - completed
-    branches: [main]
+    branches: [chore/workflow-test]
   workflow_dispatch:
     inputs:
       environment:
