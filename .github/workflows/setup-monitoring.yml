@@ -81,6 +81,10 @@ jobs:
             - job_name: 'node-exporter'
               static_configs:
                 - targets: ['localhost:9100']
+            - job_name: 'nextjs-app'
+              static_configs:
+                - targets: ['${{ secrets.EC2_HOST }}:3000']
+              metrics_path: /api/metrics
           EOP
 
           # Start stack
