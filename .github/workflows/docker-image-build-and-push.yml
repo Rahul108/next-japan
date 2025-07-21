@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: next-japan
+  IMAGE_NAME: prefixsarker/next-japan
 
 jobs:
   build-and-push:
@@ -90,7 +90,7 @@ jobs:
           
           # Wait for container to start
           sleep 10
-          
+          theme
           # Test that the application responds
           curl -f http://localhost:3000 || exit 1
           
