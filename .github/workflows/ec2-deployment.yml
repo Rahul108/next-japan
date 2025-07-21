@@ -47,123 +47,60 @@ jobs:
 
       - name: Setup SSH
         run: |
-          # Create SSH directory
           mkdir -p ~/.ssh
-          
-          # Add EC2 private key (commented out - add to secrets)
           # echo "${{ secrets.EC2_PRIVATE_KEY }}" > ~/.ssh/ec2-key.pem
           # chmod 600 ~/.ssh/ec2-key.pem
-          
-          # Add EC2 host to known hosts
           # ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-          
-          echo "# Add your EC2 private key to secrets.EC2_PRIVATE_KEY" > ~/.ssh/ec2-key.pem
-          echo "# Add your EC2 host to secrets.EC2_HOST" >> ~/.ssh/config
 
       - name: Create deployment script
         run: |
           cat > deploy.sh << 'EOF'
           #!/bin/bash
           set -e
-          
-          # Variables (these should be environment specific)
           CONTAINER_NAME="next-japan-app"
           IMAGE_NAME="prefixsarker/next-japan:latest"
           PORT="3000"
-          
-          echo "🚀 Starting deployment..."
-          
-          # Pull latest image from Docker Hub
-          echo "📥 Pulling latest Docker image from Docker Hub..."
           docker pull $IMAGE_NAME
-          
-          # Stop and remove existing container
-          echo "🛑 Stopping existing container..."
           docker stop $CONTAINER_NAME 2>/dev/null || true
           docker rm $CONTAINER_NAME 2>/dev/null || true
-          
-          # Run new container
-          echo "▶️  Starting new container..."
           docker run -d \
             --name $CONTAINER_NAME \
             --restart unless-stopped \
             -p $PORT:3000 \
             -e NODE_ENV=production \
             $IMAGE_NAME
-          
-          # Verify deployment
-          echo "🔍 Verifying deployment..."
           sleep 10
-          
           if curl -f http://localhost:$PORT/health 2>/dev/null || curl -f http://localhost:$PORT 2>/dev/null; then
-            echo "✅ Deployment successful!"
+            exit 0
           else
-            echo "❌ Deployment verification failed!"
             docker logs $CONTAINER_NAME
             exit 1
           fi
-          
-          # Cleanup old images
-          echo "🧹 Cleaning up old images..."
           docker image prune -f
-          
-          echo "🎉 Deployment completed successfully!"
           EOF
-          
           chmod +x deploy.sh
 
       - name: Deploy to EC2
         id: deploy
         run: |
-          # Note: In real deployment, use proper SSH connection
           # scp -i ~/.ssh/ec2-key.pem deploy.sh ubuntu@${{ secrets.EC2_HOST }}:/tmp/
           # ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'bash /tmp/deploy.sh'
-          
-          echo "🔧 Deployment script created and ready"
-          echo "📝 To complete deployment, you need to:"
-          echo "  1. Add EC2_PRIVATE_KEY to GitHub secrets"
-          echo "  2. Add EC2_HOST to GitHub secrets"
-          echo "  3. Add AWS credentials to GitHub secrets"
-          echo "  4. Uncomment the SSH deployment commands above"
-          
-          # Set output for environment URL
           echo "url=http://your-ec2-instance.com" >> $GITHUB_OUTPUT
 
       - name: Health check
         if: success()
         run: |
-          echo "🏥 Health check would be performed here"
-          echo "In real deployment, this would check:"
-          echo "  - Application response time"
-          echo "  - Database connectivity"
-          echo "  - External service dependencies"
-          
-          # Example health check (uncomment when EC2 is configured)
           # timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://${{ secrets.EC2_HOST }})" != "200" ]]; do sleep 5; done'
 
       - name: Rollback on failure
         if: failure()
         run: |
-          echo "🔄 Rollback procedure would be executed here"
-          echo "In real deployment, this would:"
-          echo "  - Stop the failed container"
-          echo "  - Start the previous version"
-          echo "  - Notify team of rollback"
-          
-          # Example rollback (uncomment when EC2 is configured)
           # ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'docker stop next-japan-app && docker run -d --name next-japan-app -p 3000:3000 prefixsarker/next-japan:previous'
 
       - name: Notify deployment status
         if: always()
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "📢 Deployment successful notification would be sent"
-          else
-            echo "📢 Deployment failure notification would be sent"
-          fi
-          
           # Add notification integrations here (Slack, Teams, etc.)
-          # Example:
           # curl -X POST -H 'Content-type: application/json' \
           #   --data '{"text":"Deployment ${{ job.status }} for ${{ github.repository }}"}' \
           #   ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -171,17 +108,12 @@ jobs:
       - name: Update deployment summary
         if: always()
         run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "Environment: ${{ github.event.inputs.environment || 'production' }}" >> $GITHUB_STEP_SUMMARY
+          echo "Image: ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Triggered by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Application deployed successfully" >> $GITHUB_STEP_SUMMARY
-            echo "🌐 **URL:** ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Deployment failed - check logs for details" >> $GITHUB_STEP_SUMMARY
+            echo "URL: ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
           fi
