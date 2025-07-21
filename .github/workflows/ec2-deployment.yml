@@ -83,27 +83,27 @@ jobs:
       - name: Deploy to EC2
         id: deploy
         run: |
-          # scp -i ~/.ssh/ec2-key.pem deploy.sh ubuntu@${{ secrets.EC2_HOST }}:/tmp/
-          # ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'bash /tmp/deploy.sh'
+          scp -i ~/.ssh/ec2-key.pem deploy.sh ubuntu@${{ secrets.EC2_HOST }}:/tmp/
+          ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'bash /tmp/deploy.sh'
           echo "url=http://your-ec2-instance.com" >> $GITHUB_OUTPUT
 
       - name: Health check
         if: success()
         run: |
-          # timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://${{ secrets.EC2_HOST }})" != "200" ]]; do sleep 5; done'
+          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://${{ secrets.EC2_HOST }})" != "200" ]]; do sleep 5; done'
 
-      - name: Rollback on failure
-        if: failure()
-        run: |
-          # ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'docker stop next-japan-app && docker run -d --name next-japan-app -p 3000:3000 prefixsarker/next-japan:previous'
+      # - name: Rollback on failure
+      #   if: failure()
+      #   run: |
+      #     ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'docker stop next-japan-app && docker run -d --name next-japan-app -p 3000:3000 prefixsarker/next-japan:previous'
 
-      - name: Notify deployment status
-        if: always()
-        run: |
-          # Add notification integrations here (Slack, Teams, etc.)
-          # curl -X POST -H 'Content-type: application/json' \
-          #   --data '{"text":"Deployment ${{ job.status }} for ${{ github.repository }}"}' \
-          #   ${{ secrets.SLACK_WEBHOOK_URL }}
+      # - name: Notify deployment status
+      #   if: always()
+      #   run: |
+      #     # Add notification integrations here (Slack, Teams, etc.)
+      #     # curl -X POST -H 'Content-type: application/json' \
+      #     #   --data '{"text":"Deployment ${{ job.status }} for ${{ github.repository }}"}' \
+      #     #   ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Update deployment summary
         if: always()
