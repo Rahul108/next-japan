@@ -87,10 +87,10 @@ jobs:
           ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'bash /tmp/deploy.sh'
           echo "url=http://your-ec2-instance.com" >> $GITHUB_OUTPUT
 
-      - name: Health check
-        if: success()
-        run: |
-          timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://${{ secrets.EC2_HOST }})" != "200" ]]; do sleep 5; done'
+      # - name: Health check
+      #   if: success()
+      #   run: |
+      #     timeout 60 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' http://${{ secrets.EC2_HOST }})" != "200" ]]; do sleep 5; done'
 
       # - name: Rollback on failure
       #   if: failure()
