@@ -18,7 +18,7 @@ on:
         - staging
 
 env:
-  IMAGE_NAME: next-japan
+  IMAGE_NAME: prefixsarker/next-japan
 
 jobs:
   deploy:
@@ -66,14 +66,14 @@ jobs:
           
           # Variables (these should be environment specific)
           CONTAINER_NAME="next-japan-app"
-          IMAGE_NAME="next-japan:latest"
+          IMAGE_NAME="prefixsarker/next-japan:latest"
           PORT="3000"
           
           echo "🚀 Starting deployment..."
           
-          # Pull latest image
-          echo "📥 Pulling latest Docker image..."
-          docker pull $IMAGE_NAME || echo "⚠️  Pull failed - using local image"
+          # Pull latest image from Docker Hub
+          echo "📥 Pulling latest Docker image from Docker Hub..."
+          docker pull $IMAGE_NAME
           
           # Stop and remove existing container
           echo "🛑 Stopping existing container..."
@@ -149,7 +149,7 @@ jobs:
           echo "  - Notify team of rollback"
           
           # Example rollback (uncomment when EC2 is configured)
-          # ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'docker stop next-japan-app && docker run -d --name next-japan-app -p 3000:3000 next-japan:previous'
+          # ssh -i ~/.ssh/ec2-key.pem ubuntu@${{ secrets.EC2_HOST }} 'docker stop next-japan-app && docker run -d --name next-japan-app -p 3000:3000 prefixsarker/next-japan:previous'
 
       - name: Notify deployment status
         if: always()
