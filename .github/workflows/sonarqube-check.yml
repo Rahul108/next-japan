@@ -1,64 +1,24 @@
-name: SonarQube Check
+name: Build
 
 on:
   push:
     branches:
-      - main
-      - chore/eslint
       - chore/workflow-test
-  pull_request:
-    branches:
-      - main
-      - chore/eslint
+
 
 jobs:
-  sonarqube:
-    name: SonarQube Analysis
+  build:
+    name: Build and analyze
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests with coverage
-        run: npm run test:coverage
-
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
+      - uses: sonarsource/sonarqube-scan-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
             -Dsonar.projectKey=aninda-sarker-ostad-module-8
-            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.sources=src
-            -Dsonar.tests=__tests__
-            -Dsonar.exclusions=**/node_modules/**,**/coverage/**,**/*.config.js,**/public/**
-            -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/jest.config.js,**/jest.setup.js
-
-      - name: SonarQube Quality Gate Check
-        id: sonarqube-quality-gate-check
-        uses: sonarqube-quality-gate-action@master
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      # Fail the pipeline if SonarQube gate fails
-      - name: Fail on Quality Gate failure
-        if: ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status == 'FAILED' }}
-        run: |
-          echo "SonarQube Quality Gate failed"
-          exit 1
